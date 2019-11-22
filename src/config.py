@@ -49,10 +49,13 @@ training_arg.add_argument('--optimizer', type=str, default='adam')
 training_arg.add_argument('--num_epoch', type=int, default=20)
 training_arg.add_argument('--lr_G', type=float, default=0.001)
 training_arg.add_argument('--lr_D', type=float, default=0.0002)
+training_arg.add_argument('--lr_CR', type=float, default=0.001)
 training_arg.add_argument('--beta1', type=float, default=0.5)
 training_arg.add_argument('--beta2', type=float, default=0.999)
 training_arg.add_argument('--lambda_disc', type=float, default=1)
 training_arg.add_argument('--lambda_cont', type=float, default=0.1)
+training_arg.add_argument('--alpha', type=float, default=3,
+                          help="Hyperparameter for Contrastive Loss")
 # Misc
 misc_arg = add_argument_group('Misc')
 misc_arg.add_argument('--gpu_id', type=int, default=0)
