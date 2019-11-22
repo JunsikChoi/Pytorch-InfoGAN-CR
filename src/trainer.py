@@ -8,6 +8,7 @@ import torchvision.utils as vutils
 from utils import *
 from models.mnist.discriminator import Discriminator
 from models.mnist.generator import Generator
+from models.mnist.cr_discriminator import CRDiscriminator
 torch.autograd.set_detect_anomaly(True)
 
 
@@ -22,12 +23,14 @@ class Trainer:
         self.optimizer = config.optimizer
         self.lr_G = config.lr_G
         self.lr_D = config.lr_D
+        self.lr_CR = config.lr_CR
         self.beta1 = config.beta1
         self.beta2 = config.beta2
         self.gpu_id = config.gpu_id
         self.num_epoch = config.num_epoch
         self.lambda_disc = config.lambda_disc
         self.lambda_cont = config.lambda_cont
+        self.alpha = config.alpha
         self.log_step = config.log_step
         self.project_root = config.project_root
         self.model_name = config.model_name
@@ -54,6 +57,7 @@ class Trainer:
         self.logger.create_target('Loss_D', 'D', 'Discriminator Loss')
         self.logger.create_target('Loss_Info', 'I', 'Info(G+L_d+L_c) Loss')
         self.logger.create_target('Loss_Disc', 'I_d', 'Discrete Code Loss')
+        self.logger.create_target('Loss_CR', 'CR', 'Contrastive Loss')
         self.logger.create_target(
             'Prob_D', 'P_d_real', 'Prob of D for real / fake sample')
         self.logger.create_target(
@@ -142,11 +146,11 @@ class Trainer:
                            self.dim_c_cont).to(self.device)
         self.D = Discriminator(self.n_c_disc, self.dim_c_disc,
                                self.dim_c_cont).to(self.device)
-
+        self.CR = CRDiscriminator(self.dim_c_cont).to(self.device)
         # Initialize
         self.G.apply(weights_init_normal)
         self.D.apply(weights_init_normal)
-
+        self.CR.apply(weights_init_normal)
         return
 
     def set_optimizer(self, param_list, lr):
@@ -167,10 +171,25 @@ class Trainer:
         torch.save({
             'Generator': self.G.state_dict(),
             'Discriminator': self.D.state_dict(),
+            'CRDiscriminator': self.CR.state_dict(),
             'configuations': self.config
         }, f'{save_dir}/Epoch_{epoch}.pth')
 
         return
+
+    def _get_idx_fixed_z(self):
+        idx_fixed = torch.from_numpy(np.array([np.random.randint(0, self.dim_c_cont)
+                                               for i in range(self.batch_size)])).to(self.device)
+        code_fixed = np.array([np.random.rand()
+                               for i in range(self.batch_size)])
+        latent_pair_1, _ = self._sample()
+        latent_pair_2, _ = self._sample()
+        for i in range(self.batch_size):
+            latent_pair_1[i][-self.dim_c_cont+idx_fixed[i]] = code_fixed[i]
+            latent_pair_2[i][-self.dim_c_cont+idx_fixed[i]] = code_fixed[i]
+        z = torch.cat((latent_pair_1, latent_pair_2), dim=0)
+
+        return z, idx_fixed
 
     def train(self):
         # Set opitmizers
@@ -178,6 +197,8 @@ class Trainer:
         ), self.D.latent_disc.parameters(), self.D.latent_cont_mu.parameters()], lr=self.lr_G)
         optim_D = self.set_optimizer(
             [self.D.module_shared.parameters(), self.D.module_D.parameters()], lr=self.lr_D)
+        optim_CR = self.set_optimizer(
+            [self.CR.parameters(), self.G.parameters()], lr=self.lr_CR)
 
         # Loss functions
         adversarial_loss = torch.nn.BCELoss()
@@ -256,6 +277,16 @@ class Trainer:
                 loss_info.backward()
                 optim_G.step()
 
+                optim_G.zero_grad()
+                # Calculate contrastive loss
+                idx_fixed_z, fixed_idx = self._get_idx_fixed_z()
+                idx_fixed_data = self.G(idx_fixed_z)
+                cr_logits = self.CR(
+                    idx_fixed_data[:self.batch_size], idx_fixed_data[self.batch_size:])
+                loss_cr = self.alpha * categorical_loss(cr_logits, fixed_idx)
+                loss_cr.backward()
+                optim_CR.step()
+
                 # write data to log target
                 if self.use_visdom:
                     self.logger.write('s', step)
@@ -263,6 +294,7 @@ class Trainer:
                     self.logger.write('D', loss_D.item())
                     self.logger.write('I', loss_info.item())
                     self.logger.write('I_d', loss_c_disc.item())
+                    self.logger.write('CR', loss_cr.item())
                     self.logger.write('P_d_real', prob_fake_D.mean().item())
                     self.logger.write('P_d_fake', prob_real.mean().item())
                     self.logger.write('I_c_total', loss_c_cont.sum().item())
@@ -277,8 +309,8 @@ class Trainer:
 
                     print('==========')
                     print(f'Model Name: {self.model_name}')
-                    print('Epoch [%d/%d], Step [%d/%d], Elapsed Time: %s \nLoss D : %.4f, Loss Info: %.4f\nLoss_Disc: %.4f Loss_Cont: %.4f Loss_Gen: %.4f'
-                          % (epoch + 1, self.num_epoch, step_epoch, num_steps, datetime.timedelta(seconds=time.time()-start_time), loss_D, loss_info.item(), loss_c_disc.item(), loss_c_cont.sum().item(), loss_G.item()))
+                    print('Epoch [%d/%d], Step [%d/%d], Elapsed Time: %s \nLoss D : %.4f, Loss_CR: %.4f, Loss Info: %.4f\nLoss_Disc: %.4f Loss_Cont: %.4f Loss_Gen: %.4f'
+                          % (epoch + 1, self.num_epoch, step_epoch, num_steps, datetime.timedelta(seconds=time.time()-start_time), loss_D, loss_cr.item(), loss_info.item(), loss_c_disc.item(), loss_c_cont.sum().item(), loss_G.item()))
                     for c in range(len(loss_c_cont)):
                         print('Loss of %dth continuous latent code: %.4f' %
                               (c+1, loss_c_cont[c].item()))
