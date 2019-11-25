@@ -36,7 +36,8 @@ net_arg.add_argument('--dim_z', type=int, default=62,
 
 # Data
 data_arg = add_argument_group('Data')
-data_arg.add_argument('--dataset', type=str, default='mnist')
+# data_arg.add_argument('--dataset', type=str, default='mnist')
+data_arg.add_argument('--dataset', type=str, default='dsprites')
 data_arg.add_argument('--data_dim', type=int, default=28)
 data_arg.add_argument('--batch_size', type=str, default=128)
 data_arg.add_argument('--num_worker', type=int, default=12)
@@ -63,10 +64,11 @@ misc_arg.add_argument('--log_step', type=int, default=10)
 misc_arg.add_argument('--save_step', type=int, default=10,
                       help="Number of epochs for making checkpoint")
 misc_arg.add_argument('--project_root', type=str, default=get_root())
-misc_arg.add_argument('--model_name', type=str, default='Vanila_InfoGAN')
+misc_arg.add_argument('--model_name', type=str,
+                      default='Vanila_InfoGAN-CR_dsprites')
 misc_arg.add_argument('--use_visdom', type=str2bool, default=True)
 misc_arg.add_argument('--visdom_server', type=str,
-                      default='http://localhost', help="Your visdom server address")
+                      default='http://192.168.192.99', help="Your visdom server address")
 
 
 def get_config():
