@@ -1,11 +1,16 @@
 import argparse
 import time
 from pathlib import Path
+from gpu_utils import gpu_init
 
 
 def get_root():
     project_root = str(Path(__file__).resolve().parent.parent)
     return project_root
+
+
+def get_gpu_id():
+    return gpu_init(best_gpu_metric='mem', verbose=True)
 
 
 def str2bool(v):
@@ -59,13 +64,13 @@ training_arg.add_argument('--alpha', type=float, default=3,
                           help="Hyperparameter for Contrastive Loss")
 # Misc
 misc_arg = add_argument_group('Misc')
-misc_arg.add_argument('--gpu_id', type=int, default=0)
+misc_arg.add_argument('--gpu_id', type=int, default=get_gpu_id())
 misc_arg.add_argument('--log_step', type=int, default=10)
-misc_arg.add_argument('--save_step', type=int, default=10,
+misc_arg.add_argument('--save_step', type=int, default=1,
                       help="Number of epochs for making checkpoint")
 misc_arg.add_argument('--project_root', type=str, default=get_root())
 misc_arg.add_argument('--model_name', type=str,
-                      default='Vanila_InfoGAN-CR_dsprites')
+                      default='Debugging')
 misc_arg.add_argument('--use_visdom', type=str2bool, default=True)
 misc_arg.add_argument('--visdom_server', type=str,
                       default='http://192.168.192.99', help="Your visdom server address")

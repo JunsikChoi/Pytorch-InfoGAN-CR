@@ -3,3 +3,4 @@ numpy==1.17.3
 torch==1.3.0
 torchvision==0.4.1
 visdom==0.1.8.9
+gpu-utils==0.2.8
