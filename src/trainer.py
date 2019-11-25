@@ -6,15 +6,13 @@ import datetime
 import itertools
 import torchvision.utils as vutils
 from utils import *
-from models.mnist.discriminator import Discriminator
-from models.mnist.generator import Generator
-from models.mnist.cr_discriminator import CRDiscriminator
 torch.autograd.set_detect_anomaly(True)
 
 
 class Trainer:
     def __init__(self, config, data_loader):
         self.config = config
+        self.dataset = config.dataset
         self.n_c_disc = config.n_c_disc
         self.dim_c_disc = config.dim_c_disc
         self.dim_c_cont = config.dim_c_cont
@@ -141,6 +139,17 @@ class Trainer:
         return fixed_z_dict
 
     def build_models(self):
+        if self.dataset == 'mnist':
+            from models.mnist.discriminator import Discriminator
+            from models.mnist.generator import Generator
+            from models.mnist.cr_discriminator import CRDiscriminator
+        elif self.dataset == 'dsprites':
+            from models.dsprites.vanila.discriminator import Discriminator
+            from models.dsprites.vanila.generator import Generator
+            from models.dsprites.vanila.cr_discriminator import CRDiscriminator
+        else:
+            rasie(NotImplementedError)
+
         # Initiate Models
         self.G = Generator(self.dim_z, self.n_c_disc, self.dim_c_disc,
                            self.dim_c_cont).to(self.device)
@@ -216,7 +225,6 @@ class Trainer:
             epoch_start_time = time.time()
             step_epoch = 0
             for i, (data, _) in enumerate(self.data_loader, 0):
-
                 if (data.size()[0] != self.batch_size):
                     self.batch_size = data.size()[0]
 
@@ -295,8 +303,8 @@ class Trainer:
                     self.logger.write('I', loss_info.item())
                     self.logger.write('I_d', loss_c_disc.item())
                     self.logger.write('CR', loss_cr.item())
-                    self.logger.write('P_d_real', prob_fake_D.mean().item())
-                    self.logger.write('P_d_fake', prob_real.mean().item())
+                    self.logger.write('P_d_real', prob_real.mean().item())
+                    self.logger.write('P_d_fake', prob_fake_D.mean().item())
                     self.logger.write('I_c_total', loss_c_cont.sum().item())
                     for c in range(self.dim_c_cont):
                         self.logger.write(f'I_c_{c+1}', loss_c_cont[c].item())
