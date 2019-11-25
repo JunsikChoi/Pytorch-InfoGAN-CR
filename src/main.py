@@ -7,7 +7,8 @@ from data_loader import get_loader
 
 def main(config):
     save_config(config)
-    data_loader = get_loader(config.batch_size, config.project_root)
+    data_loader = get_loader(
+        config.batch_size, config.project_root, config.dataset)
     trainer = Trainer(config, data_loader)
     trainer.train()
     return
