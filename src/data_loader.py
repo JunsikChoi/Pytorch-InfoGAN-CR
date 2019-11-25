@@ -33,7 +33,8 @@ def get_loader(batch_size, root, dataset):
         save_dir = f'{data_dir}/dsprites'
         os.makedirs(save_dir, exist_ok=True)
         dset = DSpriteDataset(save_dir)
-        dataloader = 'null'
+        dataloader = torch.utils.data.DataLoader(
+            dset, batch_size=batch_size, shuffle=True)
 
     return dataloader
 
@@ -68,15 +69,14 @@ class DSpriteDataset(Dataset):
         self.latents_values = dataset_zip['latents_values']
         self.latents_classes = dataset_zip['latents_classes']
         self.metadata = dataset_zip['metadata'][()]
-        a = 1
 
     def __len__(self):
         return len(self.imgs)
 
     def __getitem__(self, idx):
-        sample = self.imgs[idx]
-
+        sample = np.expand_dims(self.imgs[idx], axis=0).astype(np.float32)
+        label = self.latents_values[idx]
         if self.transform:
             sample = self.transform(sample)
 
-        return sample
+        return sample, label
