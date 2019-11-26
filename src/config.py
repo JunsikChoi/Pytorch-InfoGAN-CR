@@ -29,9 +29,9 @@ def add_argument_group(name):
 
 # Network
 net_arg = add_argument_group('Network')
-net_arg.add_argument('--dim_c_cont', type=int, default=2,
+net_arg.add_argument('--dim_c_cont', type=int, default=5,
                      help="Dimension of continuous latent code")
-net_arg.add_argument('--n_c_disc', type=int, default=1,
+net_arg.add_argument('--n_c_disc', type=int, default=0,
                      help="Number of categorical latent code")
 net_arg.add_argument('--dim_c_disc', type=int, default=10,
                      help="Number of category in c_disc")
@@ -43,7 +43,6 @@ net_arg.add_argument('--dim_z', type=int, default=62,
 data_arg = add_argument_group('Data')
 # data_arg.add_argument('--dataset', type=str, default='mnist')
 data_arg.add_argument('--dataset', type=str, default='dsprites')
-data_arg.add_argument('--data_dim', type=int, default=28)
 data_arg.add_argument('--batch_size', type=str, default=128)
 data_arg.add_argument('--num_worker', type=int, default=12)
 # data_arg.add_argument('--', type=, default=)
