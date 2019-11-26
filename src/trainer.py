@@ -323,7 +323,7 @@ class Trainer:
                 loss_info.backward()
                 optim_G.step()
 
-                optim_G.zero_grad()
+                optim_CR.zero_grad()
                 # Calculate contrastive loss
                 idx_fixed_z, fixed_idx = self._get_idx_fixed_z()
                 idx_fixed_data = self.G(idx_fixed_z)
