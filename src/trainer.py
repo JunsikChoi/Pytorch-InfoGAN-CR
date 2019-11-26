@@ -54,7 +54,8 @@ class Trainer:
         self.logger.create_target('Loss_G', 'G', 'Generator Loss')
         self.logger.create_target('Loss_D', 'D', 'Discriminator Loss')
         self.logger.create_target('Loss_Info', 'I', 'Info(G+L_d+L_c) Loss')
-        self.logger.create_target('Loss_Disc', 'I_d', 'Discrete Code Loss')
+        if self.n_c_disc != 0:
+            self.logger.create_target('Loss_Disc', 'I_d', 'Discrete Code Loss')
         self.logger.create_target('Loss_CR', 'CR', 'Contrastive Loss')
         self.logger.create_target(
             'Prob_D', 'P_d_real', 'Prob of D for real / fake sample')
@@ -73,70 +74,84 @@ class Trainer:
         z = torch.randn(self.batch_size, self.dim_z, device=self.device)
 
         # Sample discrete latent code from Cat(K=dim_c_disc)
-        idx = np.zeros((self.n_c_disc, self.batch_size))
-        c_disc = torch.zeros(self.batch_size, self.n_c_disc,
-                             self.dim_c_disc, device=self.device)
-        for i in range(self.n_c_disc):
-            idx[i] = np.random.randint(self.dim_c_disc, size=self.batch_size)
-            c_disc[torch.arange(0, self.batch_size), i, idx[i]] = 1.0
+        if self.n_c_disc != 0:
+            idx = np.zeros((self.n_c_disc, self.batch_size))
+            c_disc = torch.zeros(self.batch_size, self.n_c_disc,
+                                 self.dim_c_disc, device=self.device)
+            for i in range(self.n_c_disc):
+                idx[i] = np.random.randint(
+                    self.dim_c_disc, size=self.batch_size)
+                c_disc[torch.arange(0, self.batch_size), i, idx[i]] = 1.0
 
         # Sample continuous latent code from Unif(-1,1)
         c_cond = torch.rand(self.batch_size, self.dim_c_cont,
                             device=self.device) * 2 - 1
 
         # Concat z, c_disc, c_cond
-        for i in range(self.n_c_disc):
-            z = torch.cat((z, c_disc[:, i, :].squeeze()), dim=1)
+        if self.n_c_disc != 0:
+            for i in range(self.n_c_disc):
+                z = torch.cat((z, c_disc[:, i, :].squeeze()), dim=1)
         z = torch.cat((z, c_cond), dim=1)
 
-        return z, idx
+        if self.n_c_disc != 0:
+            return z, idx
+        else:
+            return z
 
     def _sample_fixed_noise(self):
-        # Sample Z from N(0,1)
-        fixed_z = torch.randn(self.dim_c_disc*10, self.dim_z)
 
-        # For each discrete variable, fix other discrete variable to 0 and random sample other variables.
-        idx = np.arange(self.dim_c_disc).repeat(10)
+        if self.n_c_disc != 0:
+            # Sample Z from N(0,1)
+            fixed_z = torch.randn(self.dim_c_disc*10, self.dim_z)
 
-        c_disc_list = []
-        for i in range(self.n_c_disc):
-            zero_template = torch.zeros(
-                self.dim_c_disc*10, self.n_c_disc, self.dim_c_disc)
-            # Set all the other discrete variable to Zero([1,0,...,0])
-            for ii in range(self.n_c_disc):
-                if (i == ii):
-                    pass
-                else:
-                    zero_template[:, ii, 0] = 1.0
-            for j in range(len(idx)):
-                zero_template[np.arange(self.dim_c_disc*10), i, idx] = 1.0
-            c_disc_list.append(zero_template)
+            # For each discrete variable, fix other discrete variable to 0 and random sample other variables.
+            idx = np.arange(self.dim_c_disc).repeat(10)
 
-        # Random sample continuous variables
-        c_rand = torch.rand(self.dim_c_disc * 10, self.dim_c_cont) * 2 - 1
-        c_range = torch.linspace(start=-1, end=1, steps=10)
+            c_disc_list = []
+            for i in range(self.n_c_disc):
+                zero_template = torch.zeros(
+                    self.dim_c_disc*10, self.n_c_disc, self.dim_c_disc)
+                # Set all the other discrete variable to Zero([1,0,...,0])
+                for ii in range(self.n_c_disc):
+                    if (i == ii):
+                        pass
+                    else:
+                        zero_template[:, ii, 0] = 1.0
+                for j in range(len(idx)):
+                    zero_template[np.arange(self.dim_c_disc*10), i, idx] = 1.0
+                c_disc_list.append(zero_template)
 
-        c_range_list = []
-        for i in range(self.dim_c_disc):
-            c_range_list.append(c_range)
-        c_range = torch.cat(c_range_list, dim=0)
+            c_range = torch.linspace(start=-1, end=1, steps=10)
+            c_range_list = []
+            for i in range(self.dim_c_disc):
+                c_range_list.append(c_range)
+            c_range = torch.cat(c_range_list, dim=0)
 
-        c_cont_list = []
-        for i in range(self.dim_c_cont):
-            c_zero = torch.zeros(self.dim_c_disc * 10, self.dim_c_cont)
-            c_zero[:, i] = c_range
-            c_cont_list.append(c_zero)
+            c_cont_list = []
+            for i in range(self.dim_c_cont):
+                c_zero = torch.zeros(self.dim_c_disc * 10, self.dim_c_cont)
+                c_zero[:, i] = c_range
+                c_cont_list.append(c_zero)
 
-        fixed_z_dict = {}
-        for idx_c_disc in range(len(c_disc_list)):
-            for idx_c_cont in range(len(c_cont_list)):
-                z = fixed_z.clone()
-                for j in range(self.n_c_disc):
-                    z = torch.cat(
-                        (z, c_disc_list[idx_c_disc][:, j, :].squeeze()), dim=1)
-                z = torch.cat((z, c_cont_list[idx_c_cont]), dim=1)
-                fixed_z_dict[(idx_c_disc, idx_c_cont)] = z
-        return fixed_z_dict
+            fixed_z_dict = {}
+            for idx_c_disc in range(len(c_disc_list)):
+                for idx_c_cont in range(len(c_cont_list)):
+                    z = fixed_z.clone()
+                    for j in range(self.n_c_disc):
+                        z = torch.cat(
+                            (z, c_disc_list[idx_c_disc][:, j, :].squeeze()), dim=1)
+                    z = torch.cat((z, c_cont_list[idx_c_cont]), dim=1)
+                    fixed_z_dict[(idx_c_disc, idx_c_cont)] = z
+            return fixed_z_dict
+        else:
+            fixed_z = torch.randn(self.dim_c_cont*10, self.dim_z)
+            c_range = np.linspace(start=-1, stop=1, num=10)
+            template = torch.zeros((self.dim_c_cont*10, self.dim_c_cont))
+            for c_dim in range(self.dim_c_cont):
+                for i, v in enumerate(c_range):
+                    template[10 * c_dim + i, c_dim] = v
+            fixed_z = torch.cat((fixed_z, template), dim=1)
+            return fixed_z
 
     def build_models(self):
         if self.dataset == 'mnist':
@@ -148,7 +163,7 @@ class Trainer:
             from models.dsprites.vanila.generator import Generator
             from models.dsprites.vanila.cr_discriminator import CRDiscriminator
         else:
-            rasie(NotImplementedError)
+            raise(NotImplementedError)
 
         # Initiate Models
         self.G = Generator(self.dim_z, self.n_c_disc, self.dim_c_disc,
@@ -191,8 +206,12 @@ class Trainer:
                                                for i in range(self.batch_size)])).to(self.device)
         code_fixed = np.array([np.random.rand()
                                for i in range(self.batch_size)])
-        latent_pair_1, _ = self._sample()
-        latent_pair_2, _ = self._sample()
+        if self.n_c_disc != 0:
+            latent_pair_1, _ = self._sample()
+            latent_pair_2, _ = self._sample()
+        else:
+            latent_pair_1 = self._sample()
+            latent_pair_2 = self._sample()
         for i in range(self.batch_size):
             latent_pair_1[i][-self.dim_c_cont+idx_fixed[i]] = code_fixed[i]
             latent_pair_2[i][-self.dim_c_cont+idx_fixed[i]] = code_fixed[i]
@@ -202,8 +221,12 @@ class Trainer:
 
     def train(self):
         # Set opitmizers
-        optim_G = self.set_optimizer([self.G.parameters(), self.D.module_Q.parameters(
-        ), self.D.latent_disc.parameters(), self.D.latent_cont_mu.parameters()], lr=self.lr_G)
+        if self.n_c_disc != 0:
+            optim_G = self.set_optimizer([self.G.parameters(), self.D.module_Q.parameters(
+            ), self.D.latent_disc.parameters(), self.D.latent_cont_mu.parameters()], lr=self.lr_G)
+        else:
+            optim_G = self.set_optimizer([self.G.parameters(), self.D.module_Q.parameters(
+            ), self.D.latent_cont_mu.parameters()], lr=self.lr_G)
         optim_D = self.set_optimizer(
             [self.D.module_shared.parameters(), self.D.module_D.parameters()], lr=self.lr_D)
         optim_CR = self.set_optimizer(
@@ -215,7 +238,10 @@ class Trainer:
         continuous_loss = NLL_gaussian()
 
         # Sample fixed latent codes for comparison
-        fixed_z_dict = self._sample_fixed_noise()
+        if self.n_c_disc != 0:
+            fixed_z_dict = self._sample_fixed_noise()
+        else:
+            fixed_z = self._sample_fixed_noise()
 
         start_time = time.time()
         num_steps = len(self.data_loader)
@@ -225,6 +251,9 @@ class Trainer:
             epoch_start_time = time.time()
             step_epoch = 0
             for i, (data, _) in enumerate(self.data_loader, 0):
+
+                if i == 3:
+                    break
                 if (data.size()[0] != self.batch_size):
                     self.batch_size = data.size()[0]
 
@@ -235,7 +264,7 @@ class Trainer:
                 optim_D.zero_grad()
 
                 # Calculate Loss D(real)
-                prob_real, _, _, _ = self.D(data_real)
+                prob_real = self.D(data_real)[0]
                 label_real = torch.full(
                     (self.batch_size,), 1, device=self.device)
                 loss_D_real = adversarial_loss(prob_real, label_real)
@@ -245,9 +274,13 @@ class Trainer:
 
                 # calculate Loss D(fake)
                 # Sample noise, latent codes
-                z, idx = self._sample()
+                if self.n_c_disc != 0:
+                    z, idx = self._sample()
+                else:
+                    z = self._sample()
                 data_fake = self.G(z)
-                prob_fake_D, _, _, _ = self.D(data_fake.detach())
+
+                prob_fake_D = self.D(data_fake.detach())[0]
                 label_fake = torch.full(
                     (self.batch_size,), 0, device=self.device)
                 loss_D_fake = adversarial_loss(prob_fake_D, label_fake)
@@ -264,24 +297,31 @@ class Trainer:
                 optim_G.zero_grad()
 
                 # Calculate loss for generator
-                prob_fake, disc_logits, mu, var = self.D(data_fake)
+                if self.n_c_disc != 0:
+                    prob_fake, disc_logits, mu, var = self.D(data_fake)
+                else:
+                    prob_fake, mu, var = self.D(data_fake)
                 loss_G = adversarial_loss(prob_fake, label_real)
 
-                # Calculate loss for discrete latent code
-                target = torch.LongTensor(idx).to(self.device)
-                loss_c_disc = 0
-                for j in range(self.n_c_disc):
-                    loss_c_disc += categorical_loss(
-                        disc_logits[:, j, :], target[j, :])
-                loss_c_disc = loss_c_disc * self.lambda_disc
+                if self.n_c_disc != 0:
+                    # Calculate loss for discrete latent code
+                    target = torch.LongTensor(idx).to(self.device)
+                    loss_c_disc = 0
+                    for j in range(self.n_c_disc):
+                        loss_c_disc += categorical_loss(
+                            disc_logits[:, j, :], target[j, :])
+                    loss_c_disc = loss_c_disc * self.lambda_disc
 
                 # Calculate loss for continuous latent code
                 loss_c_cont = continuous_loss(
                     z[:, self.dim_z+self.n_c_disc*self.dim_c_disc:], mu, var).mean(0)
-
                 loss_c_cont = loss_c_cont * self.lambda_cont
 
-                loss_info = loss_G + loss_c_disc + loss_c_cont.sum()
+                if self.n_c_disc != 0:
+                    loss_info = loss_G + loss_c_disc + loss_c_cont.sum()
+                else:
+                    loss_info = loss_G + loss_c_cont.sum()
+
                 loss_info.backward()
                 optim_G.step()
 
@@ -301,7 +341,8 @@ class Trainer:
                     self.logger.write('G', loss_G.item())
                     self.logger.write('D', loss_D.item())
                     self.logger.write('I', loss_info.item())
-                    self.logger.write('I_d', loss_c_disc.item())
+                    if self.n_c_disc != 0:
+                        self.logger.write('I_d', loss_c_disc.item())
                     self.logger.write('CR', loss_cr.item())
                     self.logger.write('P_d_real', prob_real.mean().item())
                     self.logger.write('P_d_fake', prob_fake_D.mean().item())
@@ -317,8 +358,12 @@ class Trainer:
 
                     print('==========')
                     print(f'Model Name: {self.model_name}')
-                    print('Epoch [%d/%d], Step [%d/%d], Elapsed Time: %s \nLoss D : %.4f, Loss_CR: %.4f, Loss Info: %.4f\nLoss_Disc: %.4f Loss_Cont: %.4f Loss_Gen: %.4f'
-                          % (epoch + 1, self.num_epoch, step_epoch, num_steps, datetime.timedelta(seconds=time.time()-start_time), loss_D, loss_cr.item(), loss_info.item(), loss_c_disc.item(), loss_c_cont.sum().item(), loss_G.item()))
+                    if self.n_c_disc != 0:
+                        print('Epoch [%d/%d], Step [%d/%d], Elapsed Time: %s \nLoss D : %.4f, Loss_CR: %.4f, Loss Info: %.4f\nLoss_Disc: %.4f Loss_Cont: %.4f Loss_Gen: %.4f'
+                              % (epoch + 1, self.num_epoch, step_epoch, num_steps, datetime.timedelta(seconds=time.time()-start_time), loss_D, loss_cr.item(), loss_info.item(), loss_c_disc.item(), loss_c_cont.sum().item(), loss_G.item()))
+                    else:
+                        print('Epoch [%d/%d], Step [%d/%d], Elapsed Time: %s \nLoss D : %.4f, Loss_CR: %.4f, Loss Info: %.4f\nLoss_Disc: Undefined Loss_Cont: %.4f Loss_Gen: %.4f'
+                              % (epoch + 1, self.num_epoch, step_epoch, num_steps, datetime.timedelta(seconds=time.time()-start_time), loss_D, loss_cr.item(), loss_info.item(), loss_c_cont.sum().item(), loss_G.item()))
                     for c in range(len(loss_c_cont)):
                         print('Loss of %dth continuous latent code: %.4f' %
                               (c+1, loss_c_cont[c].item()))
@@ -328,30 +373,40 @@ class Trainer:
                 step += 1
                 step_epoch += 1
 
-            # Plot and Log generated images
-            for key in fixed_z_dict.keys():
-                fixed_z = fixed_z_dict[key].to(self.device)
-                idx_c_disc = key[0]
-                idx_c_cont = key[1]
+            if self.n_c_disc != 0:
+                # Plot and Log generated images
+                for key in fixed_z_dict.keys():
+                    fixed_z = fixed_z_dict[key].to(self.device)
+                    idx_c_disc = key[0]
+                    idx_c_cont = key[1]
 
-                # Generate and plot images from fixed inputs
-                imgs, title = plot_generated_data(
-                    self.config, self.G, fixed_z, epoch, idx_c_disc, idx_c_cont)
+                    # Generate and plot images from fixed inputs
+                    imgs, title = plot_generated_data(
+                        self.config, self.G, fixed_z, epoch, idx_c_disc, idx_c_cont)
 
-                # collect images for animation
-                self.img_list[(epoch, key[0], key[1])] = vutils.make_grid(
+                    # collect images for animation
+                    self.img_list[(epoch, key[0], key[1])] = vutils.make_grid(
+                        imgs, nrow=10, padding=2, normalize=True)
+
+                    # Log Image
+                    if self.use_visdom:
+                        self.plotter.plot_image_grid(title, imgs, title)
+            else:
+                fixed_z = fixed_z.to(self.device)
+                imgs, title = plot_generated_data_only_cont(
+                    self.config, self.G, fixed_z, epoch)
+                self.img_list[epoch] = vutils.make_grid(
                     imgs, nrow=10, padding=2, normalize=True)
-
-                # Log Image
                 if self.use_visdom:
                     self.plotter.plot_image_grid(title, imgs, title)
-
             # Save checkpoint
             self.save_model(epoch+1)
 
         # Make and save animation
-        make_animation(self.config, epoch, self.n_c_disc,
-                       self.dim_c_cont, self.img_list)
+        if self.n_c_disc != 0:
+            make_animation(self.config, epoch, self.img_list)
+        else:
+            make_animation_only_cont(self.config, epoch, self.img_list)
         return
 
     def test(self):

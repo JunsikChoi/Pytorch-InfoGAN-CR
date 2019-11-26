@@ -62,12 +62,13 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(negative_slope=0.1, inplace=True),
         )
 
-        self.latent_disc = nn.Sequential(
-            nn.Linear(
-                in_features=128, out_features=self.n_c_disc*self.dim_c_disc),
-            Reshape(-1, self.n_c_disc, self.dim_c_disc),
-            nn.Softmax(dim=2)
-        )
+        if self.n_c_disc != 0:
+            self.latent_disc = nn.Sequential(
+                nn.Linear(
+                    in_features=128, out_features=self.n_c_disc*self.dim_c_disc),
+                Reshape(-1, self.n_c_disc, self.dim_c_disc),
+                nn.Softmax(dim=2)
+            )
 
         self.latent_cont_mu = nn.Linear(
             in_features=128, out_features=self.dim_c_cont)
@@ -80,10 +81,13 @@ class Discriminator(nn.Module):
         probability = self.module_D(out)
         probability = probability.squeeze()
         internal_Q = self.module_Q(out)
-        c_disc_logits = self.latent_disc(internal_Q)
         c_cont_mu = self.latent_cont_mu(internal_Q)
         c_cont_var = torch.exp(self.latent_cont_var(internal_Q))
-        return probability, c_disc_logits, c_cont_mu, c_cont_var
+        if self.n_c_disc != 0:
+            c_disc_logits = self.latent_disc(internal_Q)
+            return probability, c_disc_logits, c_cont_mu, c_cont_var
+        else:
+            return probability, c_cont_mu, c_cont_var
 
 
 class Reshape(nn.Module):

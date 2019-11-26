@@ -113,7 +113,7 @@ class VisdomPlotter(object):
             return
 
 
-def make_animation(config, end_epoch, n_c_disc, dim_c_cont, img_list):
+def make_animation(config, end_epoch, img_list):
 
     font = {'family': 'serif',
             'color':  'black',
@@ -124,8 +124,8 @@ def make_animation(config, end_epoch, n_c_disc, dim_c_cont, img_list):
         config.project_root, f'results/{config.model_name}/gifs')
     os.makedirs(save_dir, exist_ok=True)
 
-    for c_d in range(n_c_disc):
-        for c_c in range(dim_c_cont):
+    for c_d in range(config.n_c_disc):
+        for c_c in range(config.dim_c_cont):
             fig = plt.figure(figsize=(10, 10))
             plt.xticks([])
             plt.yticks([])
@@ -144,6 +144,39 @@ def make_animation(config, end_epoch, n_c_disc, dim_c_cont, img_list):
             anim.save(
                 f'{save_dir}/{config.model_name}-Cd_{c_d+1}-Cc_{c_c+1}.gif', dpi=80, writer='imagemagick')
             plt.show()
+
+    return
+
+
+def make_animation_only_cont(config, end_epoch, img_list):
+
+    font = {'family': 'serif',
+            'color':  'black',
+            'weight': 'normal',
+            'size': 10, }
+
+    save_dir = os.path.join(
+        config.project_root, f'results/{config.model_name}/gifs')
+    os.makedirs(save_dir, exist_ok=True)
+
+    fig = plt.figure(figsize=(config.dim_c_cont, 10))
+    plt.xticks([])
+    plt.yticks([])
+    plt.xlabel(f'Continuous Code Range : [-1,1]', fontsize=8)
+    plt.ylabel(f'Idx_Fixed_CC = Row_Index', fontsize=8)
+    ims = []
+    for epoch in range(end_epoch+1):
+        im = plt.imshow(np.transpose(
+            img_list[epoch].numpy(), (1, 2, 0)), animated=True)
+        title = plt.text(
+            150, -10, f'Generated Images at Epoch: {epoch+1}', horizontalalignment='center', fontdict=font)
+        ims.append([im, title])
+        del(title)
+    anim = animation.ArtistAnimation(
+        fig, ims, interval=1000, repeat_delay=1000, blit=True)
+    anim.save(
+        f'{save_dir}/{config.model_name}.gif', dpi=80, writer='imagemagick')
+    plt.show()
 
     return
 
@@ -168,9 +201,30 @@ def plot_generated_data(config, generator, z, epoch, idx_c_d, idx_c_c):
     return gen_data, title
 
 
+def plot_generated_data_only_cont(config, generator, z, epoch):
+    with torch.no_grad():
+        gen_data = generator(z).detach().cpu()
+    title = f'Fixed_{config.model_name}_E-{epoch+1}'
+    plt.figure(figsize=(config.dim_c_cont, 10))
+    plt.title(title, fontsize=10)
+    plt.xticks([])
+    plt.yticks([])
+    plt.xlabel(f'Continuous Code Range : [-1,1]', fontsize=8)
+    plt.ylabel(f'Idx_Fixed_CC = Row_Index', fontsize=8)
+    plt.imshow(np.transpose(vutils.make_grid(
+        gen_data, nrow=10, padding=2, normalize=True), (1, 2, 0)))
+    result_dir = os.path.join(
+        config.project_root, 'results', config.model_name, 'images')
+    os.makedirs(result_dir, exist_ok=True)
+    plt.savefig(os.path.join(result_dir, title+'.png'))
+    plt.close('all')
+    return gen_data, title
+
 # For debugging
 
 # Extract existing gradient dictionary from model m
+
+
 def extract_grad_dict(m):
     param_dict = {}
     for name, param in m.named_parameters():
