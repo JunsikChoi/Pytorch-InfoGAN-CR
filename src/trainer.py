@@ -252,8 +252,6 @@ class Trainer:
             step_epoch = 0
             for i, (data, _) in enumerate(self.data_loader, 0):
 
-                if i == 3:
-                    break
                 if (data.size()[0] != self.batch_size):
                     self.batch_size = data.size()[0]
 
