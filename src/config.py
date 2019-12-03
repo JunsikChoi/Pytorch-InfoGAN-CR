@@ -1,7 +1,6 @@
 import argparse
 import time
 from pathlib import Path
-from gpu_utils import gpu_init
 
 
 def get_root():
@@ -9,8 +8,8 @@ def get_root():
     return project_root
 
 
-def get_gpu_id():
-    return gpu_init(best_gpu_metric='mem', verbose=True)
+# def get_gpu_id():
+#     return gpu_init(best_gpu_metric='mem', verbose=True)
 
 
 def str2bool(v):
@@ -70,7 +69,7 @@ metric_arg.add_argument('--eval_batch_size', type=int, default=100)
 
 # Misc
 misc_arg = add_argument_group('Misc')
-misc_arg.add_argument('--gpu_id', type=int, default=get_gpu_id())
+# misc_arg.add_argument('--gpu_id', type=int, default=get_gpu_id())
 misc_arg.add_argument('--log_step', type=int, default=10)
 misc_arg.add_argument('--visdom_log_number', type=int, default=10,
                       help="How many times visdom logger send logging info to visdom server per epoch")

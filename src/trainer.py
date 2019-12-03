@@ -7,6 +7,8 @@ import itertools
 import torchvision.utils as vutils
 from utils import *
 from metrics import *
+from gpu_utils import gpu_init
+
 torch.autograd.set_detect_anomaly(True)
 
 
@@ -25,7 +27,7 @@ class Trainer:
         self.lr_CR = config.lr_CR
         self.beta1 = config.beta1
         self.beta2 = config.beta2
-        self.gpu_id = config.gpu_id
+        # self.gpu_id = config.gpu_id
         self.num_epoch = config.num_epoch
         self.lambda_disc = config.lambda_disc
         self.lambda_cont = config.lambda_cont
@@ -37,15 +39,16 @@ class Trainer:
 
         self.data_loader = data_loader
         self.img_list = {}
-        self._set_device(self.gpu_id)
+        self._set_device()
         self.build_models()
         if self.use_visdom:
             self.visdom_log_number = config.visdom_log_number
             self._set_plotter(config)
             self._set_logger()
 
-    def _set_device(self, gpu_id):
-        self.device = torch.device(gpu_id)
+    def _set_device(self):
+        self.device = gpu_init(ml_library="torch")
+        print(f'Running on GPU {self.device.index}')
 
     def _set_plotter(self, config):
         self.plotter = VisdomPlotter(config)
