@@ -65,7 +65,8 @@ class DSpriteDataset(Dataset):
             dataset_zip = np.load(
                 self.file_loc, encoding='bytes', allow_pickle=True)
         print("Dsprites Dataset Loaded")
-        self.imgs = dataset_zip['imgs']
+        self.imgs = np.expand_dims(
+            dataset_zip['imgs'], axis=1).astype(np.float32)
         self.latents_values = dataset_zip['latents_values']
         self.latents_classes = dataset_zip['latents_classes']
         self.metadata = dataset_zip['metadata'][()]
@@ -74,7 +75,7 @@ class DSpriteDataset(Dataset):
         return len(self.imgs)
 
     def __getitem__(self, idx):
-        sample = np.expand_dims(self.imgs[idx], axis=0).astype(np.float32)
+        sample = self.imgs[idx]
         label = self.latents_values[idx]
         if self.transform:
             sample = self.transform(sample)

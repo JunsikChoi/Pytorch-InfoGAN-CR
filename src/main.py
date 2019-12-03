@@ -3,6 +3,7 @@ from utils import save_config
 from trainer import Trainer
 from config import get_config
 from data_loader import get_loader
+from metrics import *
 
 
 def main(config):

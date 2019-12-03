@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils import spectral_norm
-from torch.nn.utils import spectral_norm
 
 '''
 Vanila InfoGAN CR Discriminator Model Definition for dSprites dataset

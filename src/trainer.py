@@ -6,6 +6,7 @@ import datetime
 import itertools
 import torchvision.utils as vutils
 from utils import *
+from metrics import *
 torch.autograd.set_detect_anomaly(True)
 
 
@@ -39,6 +40,7 @@ class Trainer:
         self._set_device(self.gpu_id)
         self.build_models()
         if self.use_visdom:
+            self.visdom_log_number = config.visdom_log_number
             self._set_plotter(config)
             self._set_logger()
 
@@ -63,9 +65,9 @@ class Trainer:
             'Prob_D', 'P_d_fake', 'Prob of D for real / fake sample')
         self.logger.create_target(
             'Loss_Cont', 'I_c_total', 'Continuous Code Loss')
-        for i in range(self.dim_c_cont):
-            self.logger.create_target(
-                'Loss_Cont', f'I_c_{i+1}', 'Continuous Code Loss')
+        # for i in range(self.dim_c_cont):
+        # self.logger.create_target(
+        # 'Loss_Cont', f'I_c_{i+1}', 'Continuous Code Loss')
 
         return
 
@@ -159,9 +161,13 @@ class Trainer:
             from models.mnist.generator import Generator
             from models.mnist.cr_discriminator import CRDiscriminator
         elif self.dataset == 'dsprites':
-            from models.dsprites.vanila.discriminator import Discriminator
-            from models.dsprites.vanila.generator import Generator
-            from models.dsprites.vanila.cr_discriminator import CRDiscriminator
+            # from models.dsprites.vanila_straight.discriminator import Discriminator
+            # from models.dsprites.vanila_straight.generator import Generator
+            # from models.dsprites.vanila_straight.cr_discriminator import CRDiscriminator
+            from models.dsprites.modified.discriminator import Discriminator
+            from models.dsprites.modified.generator import Generator
+            from models.dsprites.modified.cr_discriminator import CRDiscriminator
+
         else:
             raise(NotImplementedError)
 
@@ -223,10 +229,10 @@ class Trainer:
         # Set opitmizers
         if self.n_c_disc != 0:
             optim_G = self.set_optimizer([self.G.parameters(), self.D.module_Q.parameters(
-            ), self.D.latent_disc.parameters(), self.D.latent_cont_mu.parameters()], lr=self.lr_G)
+            ), self.D.latent_disc.parameters(), self.D.latent_cont.parameters()], lr=self.lr_G)
         else:
             optim_G = self.set_optimizer([self.G.parameters(), self.D.module_Q.parameters(
-            ), self.D.latent_cont_mu.parameters()], lr=self.lr_G)
+            ), self.D.latent_cont.parameters()], lr=self.lr_G)
         optim_D = self.set_optimizer(
             [self.D.module_shared.parameters(), self.D.module_D.parameters()], lr=self.lr_D)
         optim_CR = self.set_optimizer(
@@ -235,7 +241,8 @@ class Trainer:
         # Loss functions
         adversarial_loss = torch.nn.BCELoss()
         categorical_loss = torch.nn.CrossEntropyLoss()
-        continuous_loss = NLL_gaussian()
+        # continuous_loss = NLL_gaussian()
+        continuous_loss = torch.nn.MSELoss()
 
         # Sample fixed latent codes for comparison
         if self.n_c_disc != 0:
@@ -247,11 +254,13 @@ class Trainer:
         num_steps = len(self.data_loader)
         step = 0
         log_target = {}
+
+        # metric = FactorVAEMetric(self.config, self.D, self.device)
+
         for epoch in range(self.num_epoch):
             epoch_start_time = time.time()
             step_epoch = 0
             for i, (data, _) in enumerate(self.data_loader, 0):
-
                 if (data.size()[0] != self.batch_size):
                     self.batch_size = data.size()[0]
 
@@ -296,9 +305,9 @@ class Trainer:
 
                 # Calculate loss for generator
                 if self.n_c_disc != 0:
-                    prob_fake, disc_logits, mu, var = self.D(data_fake)
+                    prob_fake, disc_logits, latent_code = self.D(data_fake)
                 else:
-                    prob_fake, mu, var = self.D(data_fake)
+                    prob_fake, latent_code = self.D(data_fake)
                 loss_G = adversarial_loss(prob_fake, label_real)
 
                 if self.n_c_disc != 0:
@@ -312,13 +321,13 @@ class Trainer:
 
                 # Calculate loss for continuous latent code
                 loss_c_cont = continuous_loss(
-                    z[:, self.dim_z+self.n_c_disc*self.dim_c_disc:], mu, var).mean(0)
+                    z[:, self.dim_z+self.n_c_disc*self.dim_c_disc:], latent_code)
                 loss_c_cont = loss_c_cont * self.lambda_cont
 
                 if self.n_c_disc != 0:
                     loss_info = loss_G + loss_c_disc + loss_c_cont.sum()
                 else:
-                    loss_info = loss_G + loss_c_cont.sum()
+                    loss_info = loss_G + loss_c_cont
 
                 loss_info.backward()
                 optim_G.step()
@@ -344,27 +353,26 @@ class Trainer:
                     self.logger.write('CR', loss_cr.item())
                     self.logger.write('P_d_real', prob_real.mean().item())
                     self.logger.write('P_d_fake', prob_fake_D.mean().item())
-                    self.logger.write('I_c_total', loss_c_cont.sum().item())
-                    for c in range(self.dim_c_cont):
-                        self.logger.write(f'I_c_{c+1}', loss_c_cont[c].item())
-
-                # Print log info
-                if (step % self.log_step == 0):
+                    self.logger.write('I_c_total', loss_c_cont.item())
+                    # for c in range(self.dim_c_cont):
+                    # self.logger.write(f'I_c_{c+1}', loss_c_cont[c].item())
+                if (step % int(num_steps / self.visdom_log_number) == 0):
                     if self.use_visdom:
                         self.logger.pour_to_plotter(self.plotter)
                         self.logger.clear_data()
-
+                # Print log info
+                if (step % self.log_step == 0):
                     print('==========')
                     print(f'Model Name: {self.model_name}')
                     if self.n_c_disc != 0:
                         print('Epoch [%d/%d], Step [%d/%d], Elapsed Time: %s \nLoss D : %.4f, Loss_CR: %.4f, Loss Info: %.4f\nLoss_Disc: %.4f Loss_Cont: %.4f Loss_Gen: %.4f'
-                              % (epoch + 1, self.num_epoch, step_epoch, num_steps, datetime.timedelta(seconds=time.time()-start_time), loss_D, loss_cr.item(), loss_info.item(), loss_c_disc.item(), loss_c_cont.sum().item(), loss_G.item()))
+                              % (epoch + 1, self.num_epoch, step_epoch, num_steps, datetime.timedelta(seconds=time.time()-start_time), loss_D, loss_cr.item(), loss_info.item(), loss_c_disc.item(), loss_c_cont.item(), loss_G.item()))
                     else:
                         print('Epoch [%d/%d], Step [%d/%d], Elapsed Time: %s \nLoss D : %.4f, Loss_CR: %.4f, Loss Info: %.4f\nLoss_Disc: Undefined Loss_Cont: %.4f Loss_Gen: %.4f'
-                              % (epoch + 1, self.num_epoch, step_epoch, num_steps, datetime.timedelta(seconds=time.time()-start_time), loss_D, loss_cr.item(), loss_info.item(), loss_c_cont.sum().item(), loss_G.item()))
-                    for c in range(len(loss_c_cont)):
-                        print('Loss of %dth continuous latent code: %.4f' %
-                              (c+1, loss_c_cont[c].item()))
+                              % (epoch + 1, self.num_epoch, step_epoch, num_steps, datetime.timedelta(seconds=time.time()-start_time), loss_D, loss_cr.item(), loss_info.item(), loss_c_cont.item(), loss_G.item()))
+                    # for c in range(len(loss_c_cont)):
+                        # print('Loss of %dth continuous latent code: %.4f' %
+                        #   (c+1, loss_c_cont[c].item()))
                     print(
                         f'Prob_real_D:{prob_real.mean()}, Prob_fake_D:{prob_fake_D.mean()}, Prob_fake_G:{prob_fake.mean()}')
 

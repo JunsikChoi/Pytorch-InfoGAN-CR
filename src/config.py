@@ -47,7 +47,7 @@ data_arg.add_argument('--batch_size', type=str, default=128)
 data_arg.add_argument('--num_worker', type=int, default=12)
 # data_arg.add_argument('--', type=, default=)
 
-# Training / testing
+# Training
 training_arg = add_argument_group('Training')
 training_arg.add_argument('--is_train', type=str2bool, default=True)
 training_arg.add_argument('--optimizer', type=str, default='adam')
@@ -59,12 +59,21 @@ training_arg.add_argument('--beta1', type=float, default=0.5)
 training_arg.add_argument('--beta2', type=float, default=0.999)
 training_arg.add_argument('--lambda_disc', type=float, default=1)
 training_arg.add_argument('--lambda_cont', type=float, default=0.1)
-training_arg.add_argument('--alpha', type=float, default=3,
+training_arg.add_argument('--alpha', type=float, default=0,
                           help="Hyperparameter for Contrastive Loss")
+
+# Metric eval
+metric_arg = add_argument_group('Metric')
+metric_arg.add_argument('--num_eval_global_var', type=int, default=500)
+metric_arg.add_argument('--eval_batch_size', type=int, default=100)
+
+
 # Misc
 misc_arg = add_argument_group('Misc')
 misc_arg.add_argument('--gpu_id', type=int, default=get_gpu_id())
 misc_arg.add_argument('--log_step', type=int, default=10)
+misc_arg.add_argument('--visdom_log_number', type=int, default=10,
+                      help="How many times visdom logger send logging info to visdom server per epoch")
 misc_arg.add_argument('--save_step', type=int, default=1,
                       help="Number of epochs for making checkpoint")
 misc_arg.add_argument('--project_root', type=str, default=get_root())

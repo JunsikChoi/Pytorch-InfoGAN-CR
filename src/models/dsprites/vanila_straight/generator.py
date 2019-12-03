@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 '''
-Generator Model Definition
+Vanila InfoGAN Generator Model Definition for dSprites dataset
 '''
 
 

@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.utils import spectral_norm
+
 '''
-Discriminator Model Definition
+Vanila InfoGAN CR Discriminator Model Definition for dSprites dataset
 '''
 
 
@@ -16,25 +18,34 @@ class CRDiscriminator(nn.Module):
         # self.n_c_disc = n_c_disc
         # Shared layers
         self.module = nn.Sequential(
-            nn.Conv2d(in_channels=2,
-                      out_channels=64,
-                      kernel_size=4,
-                      stride=2,
-                      padding=1),
+            spectral_norm(nn.Conv2d(in_channels=2,
+                                    out_channels=32,
+                                    kernel_size=4,
+                                    stride=2,
+                                    padding=1)),
             nn.LeakyReLU(negative_slope=0.1, inplace=True),
-            nn.Conv2d(in_channels=64,
-                      out_channels=128,
-                      kernel_size=4,
-                      stride=2,
-                      padding=1),
-            nn.BatchNorm2d(128),
+            spectral_norm(nn.Conv2d(in_channels=32,
+                                    out_channels=32,
+                                    kernel_size=4,
+                                    stride=2,
+                                    padding=1)),
             nn.LeakyReLU(negative_slope=0.1, inplace=True),
-            Reshape(-1, 128*7*7),
-            nn.Linear(in_features=128*7*7, out_features=1024),
-            nn.BatchNorm1d(1024),
+            spectral_norm(nn.Conv2d(in_channels=32,
+                                    out_channels=64,
+                                    kernel_size=4,
+                                    stride=2,
+                                    padding=1)),
             nn.LeakyReLU(negative_slope=0.1, inplace=True),
-            nn.Linear(in_features=1024, out_features=self.dim_c_cont),
-            # nn.Softmax(dim=1)
+            spectral_norm(nn.Conv2d(in_channels=64,
+                                    out_channels=64,
+                                    kernel_size=4,
+                                    stride=2,
+                                    padding=1)),
+            nn.LeakyReLU(negative_slope=0.1, inplace=True),
+            Reshape(-1, 64*4*4),
+            spectral_norm(nn.Linear(in_features=64*4*4, out_features=128)),
+            nn.LeakyReLU(negative_slope=0.1, inplace=True),
+            nn.Linear(in_features=128, out_features=self.dim_c_cont),
         )
 
     def forward(self, x1, x2):
